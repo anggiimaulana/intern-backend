@@ -43,7 +43,17 @@ class RecordsController extends Controller
 
         $this->service->invalidateCaches();
 
-        return response()->json(['id' => $id, 'message' => 'Created'], 201);
+        $record = DB::table('records')->where('id', $id)->first();
+
+        return response()->json([
+            'data' => [
+                'id'      => $record->id,
+                'field_1' => $record->field_1,
+                'field_2' => $record->field_2,
+                'field_3' => $record->field_3,
+            ],
+            'message' => 'Created',
+        ], 201);
     }
 
     public function update(Request $request, int $id): JsonResponse
@@ -54,20 +64,31 @@ class RecordsController extends Controller
             'field_3' => 'required|string|max:50',
         ]);
 
-        $updated = DB::table('records')->where('id', $id)->update([
+        $record = DB::table('records')->where('id', $id)->first();
+        if (!$record) {
+            return response()->json(['message' => 'Not found'], 404);
+        }
+
+        DB::table('records')->where('id', $id)->update([
             'field_1' => $data['field_1'],
             'field_2' => $data['field_2'],
             'field_3' => $data['field_3'],
             'updated_at' => now(),
         ]);
 
-        if (!$updated) {
-            return response()->json(['message' => 'Not found'], 404);
-        }
-
         $this->service->invalidateCaches();
 
-        return response()->json(['message' => 'Updated']);
+        $record = DB::table('records')->where('id', $id)->first();
+
+        return response()->json([
+            'data' => [
+                'id'      => $record->id,
+                'field_1' => $record->field_1,
+                'field_2' => $record->field_2,
+                'field_3' => $record->field_3,
+            ],
+            'message' => 'Updated',
+        ]);
     }
 
     public function destroy(int $id): JsonResponse

@@ -1,4 +1,4 @@
-<div x-data="recordsApp()" x-init="init()" class="flex flex-col gap-4 h-[calc(100dvh-14rem)]">
+<div x-data="recordsApp()" x-init="init()" class="flex flex-col gap-4 min-h-0">
     <!-- Performance Monitoring Banner -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-gradient-to-r from-indigo-900 via-purple-900 to-slate-900 text-white p-4 rounded-xl shadow-lg">
         <div class="flex items-center space-x-2">
@@ -20,7 +20,7 @@
             <div class="p-2 bg-blue-600/30 rounded-lg"><svg class="w-5 h-5 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg></div>
             <div>
                 <p class="text-xs text-blue-200 uppercase tracking-wider">Index</p>
-                <p class="text-sm font-bold text-blue-300" x-text="querySpeed"></p>
+                <p class="text-sm font-bold text-blue-300" x-text="databaseTimeMs > 0 ? databaseTimeMs.toFixed(2) + ' ms' : '-'"></p>
             </div>
         </div>
     </div>
@@ -32,7 +32,7 @@
                 <!-- Sort -->
                 <div class="flex-1 min-w-[140px]">
                     <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Sort</label>
-                    <select x-model="sort" @change="resetAndLoad()" class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                    <select x-model="sort" class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                         <option value="desc">⬇ Terbaru (ID Desc)</option>
                         <option value="asc">⬆ Terlama (ID Asc)</option>
                     </select>
@@ -41,7 +41,7 @@
                 <!-- Per Page -->
                 <div class="min-w-[120px]">
                     <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Per Page</label>
-                    <select x-model="perPage" @change="onPerPageChange()" class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                    <select x-model="perPage" class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                         <option value="10">10</option>
                         <option value="25">25</option>
                         <option value="50">50</option>
@@ -53,7 +53,7 @@
                         <option value="custom">Custom</option>
                     </select>
                     <div x-show="perPage === 'custom'" class="mt-1">
-                        <input type="number" x-model="customPerPage" @input.debounce="resetAndLoad()" placeholder="Custom amount" class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        <input type="number" x-model="customPerPage" placeholder="Custom amount" class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                     </div>
                 </div>
 
@@ -108,7 +108,7 @@
     </div>
 
     <!-- Data Table (visible when not loading) -->
-    <div x-show="!loading" x-ref="tableContainer" class="flex-1 overflow-y-auto bg-white dark:bg-gray-800 shadow-sm rounded-xl border border-gray-200 dark:border-gray-700">
+    <div x-show="!loading" x-ref="tableContainer" :style="tableMaxHeight ? 'max-height: ' + tableMaxHeight + 'px' : ''" class="overflow-y-auto bg-white dark:bg-gray-800 shadow-sm rounded-xl border border-gray-200 dark:border-gray-700">
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead class="bg-gray-50 dark:bg-gray-900">
@@ -235,10 +235,11 @@
                 total: 0,
                 filteredTotal: null,
                 loadSpeedMs: 0,
-                querySpeed: '',
                 loading: true,
                 loadingMore: false,
                 hasMore: true,
+                tableMaxHeight: null,
+                databaseTimeMs: 0,
 
                 sort: 'desc',
                 perPage: '500',
@@ -261,9 +262,11 @@
                 },
 
                 get actualLimit() {
-                    if (this.perPage === 'custom') return parseInt(this.customPerPage) || 500;
-                    if (this.perPage === 'all') return 9999999;
-                    return parseInt(this.perPage) || 500;
+                    let raw;
+                    if (this.perPage === 'custom') raw = parseInt(this.customPerPage);
+                    else if (this.perPage === 'all') raw = 9999999;
+                    else raw = parseInt(this.perPage);
+                    return Math.min(raw || 500, 1000);
                 },
 
                 formatNumber(n) {
@@ -301,7 +304,7 @@
                         this.nextCursor = data.next_cursor;
                         this.total = data.total;
                         this.filteredTotal = data.filtered_total;
-                        this.querySpeed = data.query_execution_speed || '';
+                        this.databaseTimeMs = data.database_time_ms ?? 0;
                         this.loadSpeedMs = ((performance.now() - start) / 1000).toFixed(2);
 
                         if (!this.nextCursor) this.hasMore = false;
@@ -311,6 +314,7 @@
                         console.error('Failed to load records', e);
                     } finally {
                         this.loading = false;
+                        this.updateTableHeight();
                     }
                 },
 
@@ -325,7 +329,7 @@
                         this.records = this.records.concat(newRecords);
                         this.nextCursor = data.next_cursor;
                         this.filteredTotal = data.filtered_total;
-                        this.querySpeed = data.query_execution_speed || '';
+                        this.databaseTimeMs = data.database_time_ms ?? 0;
 
                         if (!this.nextCursor || newRecords.length === 0) this.hasMore = false;
                     } catch (e) {
@@ -352,10 +356,6 @@
                 resetAndLoad() {
                     if (this.observer) this.observer.disconnect();
                     this.loadFirstPage();
-                },
-
-                onPerPageChange() {
-                    if (this.perPage !== 'custom') this.resetAndLoad();
                 },
 
                 applyFilters() {
@@ -437,7 +437,17 @@
                     }
                 },
 
+                updateTableHeight() {
+                    this.$nextTick(() => {
+                        const rect = this.$el.getBoundingClientRect();
+                        const available = window.innerHeight - rect.top - 16;
+                        this.tableMaxHeight = Math.max(available, 200);
+                    });
+                },
+
                 init() {
+                    this.updateTableHeight();
+                    window.addEventListener('resize', () => this.updateTableHeight());
                     this.loadFirstPage();
                 }
             };

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Services\DataQueryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class DataController extends Controller
 {
@@ -51,7 +52,7 @@ class DataController extends Controller
             'field_3' => 'required|string|max:50',
         ]);
 
-        $id = \Illuminate\Support\Facades\DB::table('records')->insertGetId([
+        $id = DB::table('records')->insertGetId([
             'field_1' => $validated['field_1'],
             'field_2' => $validated['field_2'],
             'field_3' => $validated['field_3'],
@@ -61,7 +62,17 @@ class DataController extends Controller
 
         $this->service->invalidateCaches();
 
-        return response()->json(['id' => $id, 'message' => 'Record created successfully'], 201);
+        $record = DB::table('records')->where('id', $id)->first();
+
+        return response()->json([
+            'data' => [
+                'id'      => $record->id,
+                'field_1' => $record->field_1,
+                'field_2' => $record->field_2,
+                'field_3' => $record->field_3,
+            ],
+            'message' => 'Record created successfully',
+        ], 201);
     }
 
     public function update(Request $request, int $id): JsonResponse
@@ -72,7 +83,12 @@ class DataController extends Controller
             'field_3' => 'required|string|max:50',
         ]);
 
-        \Illuminate\Support\Facades\DB::table('records')->where('id', $id)->update([
+        $record = DB::table('records')->where('id', $id)->first();
+        if (!$record) {
+            return response()->json(['message' => 'Not found'], 404);
+        }
+
+        DB::table('records')->where('id', $id)->update([
             'field_1' => $validated['field_1'],
             'field_2' => $validated['field_2'],
             'field_3' => $validated['field_3'],
@@ -81,12 +97,27 @@ class DataController extends Controller
 
         $this->service->invalidateCaches();
 
-        return response()->json(['message' => 'Record updated successfully']);
+        $record = DB::table('records')->where('id', $id)->first();
+
+        return response()->json([
+            'data' => [
+                'id'      => $record->id,
+                'field_1' => $record->field_1,
+                'field_2' => $record->field_2,
+                'field_3' => $record->field_3,
+            ],
+            'message' => 'Record updated successfully',
+        ]);
     }
 
     public function destroy(int $id): JsonResponse
     {
-        \Illuminate\Support\Facades\DB::table('records')->where('id', $id)->delete();
+        $exists = DB::table('records')->where('id', $id)->exists();
+        if (!$exists) {
+            return response()->json(['message' => 'Not found'], 404);
+        }
+
+        DB::table('records')->where('id', $id)->delete();
         $this->service->invalidateCaches();
 
         return response()->json(['message' => 'Record deleted successfully']);
